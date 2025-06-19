@@ -1,97 +1,135 @@
-// Hide the page immediately
-document.documentElement.style.visibility = "hidden";
+// Enhanced retro browsing experience with delay simulation
+(function () {
+  let currentTimeout;
+  let isNavigating = false;
+  let delayMs;
 
-// Create loading overlay
-const overlay = document.createElement("div");
-overlay.style.cssText = `
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(45deg, #1e3c72 0%, #2a5298 100%);
-  z-index: 999999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Courier New', monospace;
-  color: #00ff00;
-`;
+  // Hide the page immediately
+  document.documentElement.style.visibility = "hidden";
+  document.documentElement.style.cursor = "wait";
 
-// Get settings and show appropriate retro message
-chrome.storage.sync.get(["selectedYear", "delaySeconds"], (result) => {
-  const selectedYear = result.selectedYear || "1995";
-  const delaySeconds = result.delaySeconds || 25;
-  const delayMs = delaySeconds * 1000;
+  // Add retro message based on year and delay
+  chrome.storage.sync.get(["selectedYear", "delaySeconds"], (result) => {
+    const delaySeconds = Math.max(0, result.delaySeconds || 25);
+    delayMs = delaySeconds * 1000;
 
-  // Get retro message based on year
-  let loadingMessage = getRetroMessage(selectedYear, delaySeconds);
+    // Initial page load delay
+    showPageAfterDelay();
 
-  overlay.innerHTML = `
-    <div style="
-      text-align: center;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 40px;
-      border-radius: 10px;
-      border: 2px solid #00ff00;
-      box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-      max-width: 500px;
-    ">
-      <h2 style="
-        color: #00ff00;
-        margin-bottom: 20px;
-        text-shadow: 0 0 10px #00ff00;
-        font-size: 24px;
-      ">🕰️ TIME MACHINE ACTIVE</h2>
-      <div style="
-        color: #ffffff;
-        font-size: 16px;
-        line-height: 1.6;
-        margin-bottom: 20px;
-      ">${loadingMessage}</div>
-      <div style="
-        color: #ffff00;
-        font-size: 14px;
-        animation: blink 1s infinite;
-      ">⏳ Loading... Please wait ${delaySeconds} seconds</div>
-    </div>
-    <style>
-      @keyframes blink {
-        0%, 50% { opacity: 1; }
-        51%, 100% { opacity: 0.3; }
-      }
-    </style>
-  `;
+    // Intercept link clicks to apply delay
+    document.addEventListener("click", handleLinkClick);
 
-  // Add overlay when DOM is ready
-  if (document.body) {
-    document.body.appendChild(overlay);
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      document.body.appendChild(overlay);
-    });
+    // Intercept form submissions
+    document.addEventListener("submit", handleFormSubmit);
+
+    // Handle browser back/forward navigation
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pagehide", handlePageHide);
+  });
+
+  function showPageAfterDelay() {
+    clearCurrentTimeout();
+
+    currentTimeout = setTimeout(() => {
+      document.documentElement.style.visibility = "visible";
+      document.documentElement.style.cursor = "";
+      isNavigating = false;
+      currentTimeout = null;
+    }, delayMs);
   }
 
-  // After configured delay, show the actual page
-  setTimeout(() => {
-    overlay.remove();
-    document.documentElement.style.visibility = "visible";
-  }, delayMs);
-});
+  function hidePageWithDelay() {
+    if (isNavigating) return; // Prevent multiple simultaneous navigations
 
-function getRetroMessage(year, delay) {
-  const messages = {
-    2024: "Welcome to the future! Instant loading activated.",
-    2020: "High-speed broadband simulation running...",
-    2015: "Standard broadband experience loading...",
-    2010: "ADSL2+ connection established. Buffering...",
-    2005: "Basic broadband active. Loading MySpace-era speeds...",
-    2000: "Early broadband engaged. Y2K-compliant loading...",
-    1998: "*DIAL-UP SOUNDS* EEEEeeeee AWWWWwwww<br>Connecting at 56k... Don't pick up the phone!",
-    1995: "28.8k modem active. Time to make some coffee...<br>Remember when images loaded line by line?",
-    1992: "14.4k connection established. Grab a snack...<br>This is authentic early internet experience!",
-    1990: "9600 baud modem engaged. Maybe read a book?<br>Welcome to the stone age of the internet!",
-  };
+    isNavigating = true;
+    document.documentElement.style.visibility = "hidden";
+    document.documentElement.style.cursor = "wait";
+  }
 
-  return messages[year] || messages[1995];
-}
+  function clearCurrentTimeout() {
+    if (currentTimeout) {
+      clearTimeout(currentTimeout);
+      currentTimeout = null;
+    }
+  }
+
+  function handleLinkClick(e) {
+    const link = e.target.closest("a");
+    if (
+      link &&
+      link.href &&
+      link.origin === location.origin &&
+      !link.hasAttribute("target") &&
+      !isNavigating
+    ) {
+      e.preventDefault();
+
+      hidePageWithDelay();
+
+      clearCurrentTimeout();
+      currentTimeout = setTimeout(() => {
+        window.location.href = link.href;
+      }, delayMs);
+    }
+  }
+
+  function handleFormSubmit(e) {
+    if (isNavigating) {
+      e.preventDefault();
+      return;
+    }
+
+    const form = e.target;
+    if (form && form.tagName === "FORM") {
+      // Only delay forms that stay on the same origin
+      const formAction = form.action || window.location.href;
+      const actionUrl = new URL(formAction, window.location.origin);
+
+      if (actionUrl.origin === location.origin) {
+        e.preventDefault();
+
+        hidePageWithDelay();
+
+        clearCurrentTimeout();
+        currentTimeout = setTimeout(() => {
+          // Manually submit the form
+          form.submit();
+        }, delayMs);
+      }
+    }
+  }
+
+  function handlePageShow(e) {
+    // This fires when navigating back/forward or when page becomes visible
+    if (e.persisted) {
+      // Page was restored from cache (back/forward navigation)
+      document.documentElement.style.visibility = "hidden";
+      document.documentElement.style.cursor = "wait";
+      isNavigating = false;
+      showPageAfterDelay();
+    }
+  }
+
+  function handlePageHide(e) {
+    // Clean up when leaving the page
+    clearCurrentTimeout();
+    isNavigating = false;
+  }
+
+  // Handle cases where the page might already be visible (edge cases)
+  if (document.readyState === "complete") {
+    // If page is already loaded, still apply the delay
+    showPageAfterDelay();
+  }
+
+  // Emergency escape hatch - press Ctrl+Shift+R to bypass delay
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === "R") {
+      clearCurrentTimeout();
+      document.documentElement.style.visibility = "visible";
+      document.documentElement.style.cursor = "";
+      isNavigating = false;
+      console.log("Retro delay bypassed!");
+    }
+  });
+})();
