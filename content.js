@@ -17,25 +17,30 @@ overlay.style.cssText = `
   font-family: Arial, sans-serif;
 `;
 
-overlay.innerHTML = `
-  <div style="text-align: center;">
-    <h3>Loading...</h3>
-    <p>Please wait 3 seconds...</p>
-  </div>
-`;
+// Get delay setting and show appropriate message
+chrome.storage.sync.get(["delaySeconds"], (result) => {
+  const delaySeconds = result.delaySeconds || 3;
+  const delayMs = delaySeconds * 1000;
 
-// Add overlay when DOM is ready
-if (document.body) {
-  document.body.appendChild(overlay);
-} else {
-  document.addEventListener("DOMContentLoaded", () => {
+  overlay.innerHTML = `
+    <div style="text-align: center;">
+      <h3>Loading...</h3>
+      <p>Please wait ${delaySeconds} seconds...</p>
+    </div>
+  `;
+
+  // Add overlay when DOM is ready
+  if (document.body) {
     document.body.appendChild(overlay);
-  });
-}
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.body.appendChild(overlay);
+    });
+  }
 
-// After 3 seconds, show the actual page
-setTimeout(() => {
-  console.log("hi");
-  overlay.remove();
-  document.documentElement.style.visibility = "visible";
-}, 3000);
+  // After configured delay, show the actual page
+  setTimeout(() => {
+    overlay.remove();
+    document.documentElement.style.visibility = "visible";
+  }, delayMs);
+});
