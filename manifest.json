@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Page Load Delay Extension",
+  "name": "Internet Time Machine",
   "version": "1.0",
-  "description": "Adds a configurable delay before each page loads",
+  "description": "Experience the internet at different historical speeds",
   "permissions": ["storage"],
   "options_page": "options.html",
   "content_scripts": [
