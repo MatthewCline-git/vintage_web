@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Internet Time Machine",
+  "name": "Vintage Web",
   "version": "1.0",
-  "description": "Experience the internet at different historical speeds",
+  "description": "Slow down the internet",
   "permissions": ["storage"],
   "options_page": "options.html",
   "content_scripts": [
