@@ -16,15 +16,21 @@
     // Initial page load delay
     showPageAfterDelay();
 
-    // Intercept link clicks to apply delay
-    document.addEventListener("click", handleLinkClick);
+    // Intercept link clicks to apply delay (with capture for Shadow DOM)
+    document.addEventListener("click", handleLinkClick, true);
 
     // Intercept form submissions
     document.addEventListener("submit", handleFormSubmit);
 
+    // YouTube-specific: Monitor URL changes more aggressively
+    startURLMonitoring();
+
     // Handle browser back/forward navigation
     window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("pagehide", handlePageHide);
+
+    // Intercept SPA navigation (History API)
+    interceptHistoryAPI();
   });
 
   function showPageAfterDelay() {
@@ -55,21 +61,36 @@
 
   function handleLinkClick(e) {
     const link = e.target.closest("a");
-    if (
-      link &&
-      link.href &&
-      link.origin === location.origin &&
-      !link.hasAttribute("target") &&
-      !isNavigating
-    ) {
-      e.preventDefault();
+    if (link && link.href && !link.hasAttribute("target") && !isNavigating) {
+      // Check if it's a same-origin link OR a YouTube-style navigation
+      const linkUrl = new URL(link.href);
+      const currentUrl = new URL(location.href);
 
-      hidePageWithDelay();
+      if (
+        linkUrl.origin === currentUrl.origin ||
+        linkUrl.hostname === currentUrl.hostname
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
 
-      clearCurrentTimeout();
-      currentTimeout = setTimeout(() => {
-        window.location.href = link.href;
-      }, delayMs);
+        hidePageWithDelay();
+
+        clearCurrentTimeout();
+        currentTimeout = setTimeout(() => {
+          // For YouTube and other complex SPAs, try both methods
+          if (link.click && typeof link.click === "function") {
+            // Simulate a real click
+            const clickEvent = new MouseEvent("click", {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+            });
+            link.dispatchEvent(clickEvent);
+          } else {
+            window.location.href = link.href;
+          }
+        }, delayMs);
+      }
     }
   }
 
@@ -120,6 +141,79 @@
   if (document.readyState === "complete") {
     // If page is already loaded, still apply the delay
     showPageAfterDelay();
+  }
+
+  function startURLMonitoring() {
+    let lastUrl = location.href;
+
+    // Poll for URL changes (catches PJAX and other custom navigation)
+    const urlCheckInterval = setInterval(() => {
+      if (location.href !== lastUrl && !isNavigating) {
+        console.log("URL change detected:", lastUrl, "→", location.href);
+        lastUrl = location.href;
+
+        // Apply delay for URL changes
+        hidePageWithDelay();
+        showPageAfterDelay();
+      }
+    }, 100);
+
+    // Clean up interval when page unloads
+    window.addEventListener("beforeunload", () => {
+      clearInterval(urlCheckInterval);
+    });
+  }
+
+  function interceptHistoryAPI() {
+    // Store original methods
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    // Override pushState
+    history.pushState = function (state, title, url) {
+      if (
+        !isNavigating &&
+        url &&
+        url !== location.pathname + location.search + location.hash
+      ) {
+        hidePageWithDelay();
+
+        clearCurrentTimeout();
+        currentTimeout = setTimeout(() => {
+          originalPushState.call(history, state, title, url);
+          showPageAfterDelay();
+        }, delayMs);
+      } else {
+        originalPushState.call(history, state, title, url);
+      }
+    };
+
+    // Override replaceState
+    history.replaceState = function (state, title, url) {
+      if (
+        !isNavigating &&
+        url &&
+        url !== location.pathname + location.search + location.hash
+      ) {
+        hidePageWithDelay();
+
+        clearCurrentTimeout();
+        currentTimeout = setTimeout(() => {
+          originalReplaceState.call(history, state, title, url);
+          showPageAfterDelay();
+        }, delayMs);
+      } else {
+        originalReplaceState.call(history, state, title, url);
+      }
+    };
+
+    // Also intercept popstate (back/forward in SPAs)
+    window.addEventListener("popstate", (e) => {
+      if (!isNavigating) {
+        hidePageWithDelay();
+        showPageAfterDelay();
+      }
+    });
   }
 
   // Emergency escape hatch - press Ctrl+Shift+R to bypass delay
